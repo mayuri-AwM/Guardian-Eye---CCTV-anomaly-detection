@@ -1,0 +1,269 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700&display=swap');
+
+/* ─── Footer wrapper ─────────────────────────────── */
+.ft-footer {
+  font-family: 'Syne', sans-serif;
+  background: #0d1117;
+  border-top: 0.5px solid #21262d;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+/* ─── Animated scan line ─────────────────────────── */
+.ft-scanline {
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 35%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #58a6ff, transparent);
+  animation: ft-scan 4s linear infinite;
+}
+
+@keyframes ft-scan {
+  0%   { left: -40%; }
+  100% { left: 110%; }
+}
+
+/* ─── Inner grid ─────────────────────────────────── */
+.ft-inner {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr 1fr 1fr 1.4fr;
+  gap: 3rem;
+  padding: 4rem 8vw 3rem;
+  border-bottom: 0.5px solid #21262d;
+}
+
+/* ─── Brand column ───────────────────────────────── */
+.ft-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #e6edf3;
+  margin-bottom: 1rem;
+}
+
+.ft-logo-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #58a6ff;
+  animation: ft-blink 2s infinite;
+}
+
+@keyframes ft-blink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(88,166,255,0.4); }
+  50%       { opacity: 0.6; box-shadow: 0 0 0 4px rgba(88,166,255,0); }
+}
+
+.ft-tagline {
+  font-size: 13px;
+  color: #7d8590;
+  line-height: 1.7;
+  margin-bottom: 1.5rem;
+}
+
+/* ─── Social icons ───────────────────────────────── */
+.ft-socials {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.ft-social-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  border: 0.5px solid #30363d;
+  background: transparent;
+  color: #7d8590;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.ft-social-btn:hover {
+  border-color: #58a6ff;
+  color: #58a6ff;
+  background: rgba(88,166,255,0.06);
+}
+
+/* ─── Status badge ───────────────────────────────── */
+.ft-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: #39d353;
+  border: 0.5px solid rgba(57,211,83,0.3);
+  padding: 4px 10px;
+  border-radius: 3px;
+  width: fit-content;
+}
+
+.ft-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #39d353;
+  animation: ft-pulse 1.4s infinite;
+}
+
+@keyframes ft-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+
+/* ─── Link columns ───────────────────────────────── */
+.ft-col-heading {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: #7d8590;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 1.2rem;
+}
+
+.ft-col-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ft-link {
+  font-size: 13px;
+  color: #8b949e;
+  text-decoration: none;
+  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ft-link:hover {
+  color: #58a6ff;
+}
+
+.ft-link::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 1px;
+  background: #58a6ff;
+  transition: width 0.2s;
+  vertical-align: middle;
+}
+
+.ft-link:hover::before {
+  width: 10px;
+}
+
+/* ─── Newsletter ─────────────────────────────────── */
+.ft-newsletter-text {
+  font-size: 12px;
+  color: #7d8590;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.ft-newsletter-row {
+  display: flex;
+  gap: 0;
+}
+
+.ft-newsletter-input {
+  flex: 1;
+  background: #161b22;
+  border: 0.5px solid #30363d;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  color: #c9d1d9;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-family: 'Syne', sans-serif;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.ft-newsletter-input::placeholder { color: #484f58; }
+
+.ft-newsletter-input:focus {
+  border-color: rgba(88,166,255,0.6);
+}
+
+.ft-newsletter-btn {
+  background: #1f6feb;
+  border: none;
+  border-radius: 0 6px 6px 0;
+  color: #fff;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ft-newsletter-btn:hover { background: #388bfd; }
+
+/* ─── Bottom bar ─────────────────────────────────── */
+.ft-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.2rem 8vw;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ft-copy {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: #484f58;
+}
+
+.ft-bottom-links {
+  display: flex;
+  gap: 20px;
+}
+
+.ft-bottom-link {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: #484f58;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.ft-bottom-link:hover { color: #58a6ff; }
+
+/* ─── Responsive ─────────────────────────────────── */
+@media (max-width: 1024px) {
+  .ft-inner {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 2rem;
+  }
+  .ft-brand {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 600px) {
+  .ft-inner {
+    grid-template-columns: 1fr 1fr;
+    padding: 3rem 6vw 2rem;
+  }
+  .ft-bottom {
+    padding: 1rem 6vw;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .ft-newsletter {
+    grid-column: 1 / -1;
+  }
+}

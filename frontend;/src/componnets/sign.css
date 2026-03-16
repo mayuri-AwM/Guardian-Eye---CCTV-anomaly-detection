@@ -1,0 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.signup-container {
+  font-family: 'Syne', sans-serif;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  padding: 2rem 1rem;
+}
+
+.signup-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 14, 20, 0.75);
+  backdrop-filter: blur(2px);
+  z-index: 0;
+}
+
+.glass-form {
+  position: relative;
+  z-index: 1;
+  background: rgba(22, 27, 34, 0.75);
+  border: 0.5px solid rgba(88, 166, 255, 0.2);
+  border-radius: 16px;
+  padding: 2.5rem 2.2rem;
+  width: 100%;
+  max-width: 440px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  animation: sg-slideUp 0.5s ease both;
+}
+
+@keyframes sg-slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.glass-form h1 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #e6edf3;
+  margin-bottom: 0.4rem;
+  text-align: center;
+}
+
+.glass-form h1::after {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 2px;
+  background: #58a6ff;
+  border-radius: 2px;
+  margin: 10px auto 1.6rem;
+}
+
+.glass-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.glass-form input {
+  background: rgba(13, 17, 23, 0.7);
+  border: 0.5px solid #30363d;
+  border-radius: 8px;
+  color: #c9d1d9;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-family: 'Syne', sans-serif;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+}
+
+.glass-form input::placeholder {
+  color: white;
+}
+
+.glass-form input:focus {
+  border-color: rgba(88, 166, 255, 0.6);
+  background: rgba(13, 17, 23, 0.9);
+}
+
+.glass-form button[type="submit"] {
+  background: #1f6feb;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  padding: 13px;
+  font-size: 14px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  margin-top: 4px;
+  letter-spacing: 0.02em;
+}
+
+.glass-form button[type="submit"]:hover  { background: #388bfd; }
+.glass-form button[type="submit"]:active { transform: scale(0.98); }
+
+
+.login-text {
+  text-align: center;
+  font-size: 12px;
+  color: #7d8590;
+  font-family: 'Share Tech Mono', monospace;
+  margin-top: 4px;
+}
+
+.login-text a {
+  color: #58a6ff;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.login-text a:hover {
+  color: #79c0ff;
+  text-decoration: underline;
+}
+@media (max-width: 480px) {
+  .glass-form {
+    padding: 2rem 1.4rem;
+  }
+
+  .glass-form h1 {
+    font-size: 1.5rem;
+  }
+}

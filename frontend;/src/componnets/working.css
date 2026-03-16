@@ -1,0 +1,62 @@
+.work-container {
+  background:rgb(245, 243, 241);
+  margin: 0;
+  min-height: 100vh;
+  padding: 0px 80px 40px 80px; /* ← changed top padding from 40px to 0 */
+}
+
+.work-container h1{
+  margin-top:0;
+}
+.para{
+    text-align: center;
+    margin-bottom: 30px;
+}
+.title {
+  text-align: center;
+  font-size: 40px;
+  margin-bottom: 20px;
+  color: #00a8e8;
+  margin-left: 180px;
+  margin-top: 0;
+  padding-top: 40px; /* ← move spacing here instead */
+}
+
+.steps{
+max-width:900px;
+margin:auto;
+}
+
+.step-card{
+background:white;
+padding:25px;
+border-radius:10px;
+margin-bottom:20px;
+box-shadow:0 4px 10px rgba(0,0,0,0.1);
+transition: all 0.3s ease;   /* smooth animation */
+cursor:pointer;
+}
+
+.step-card:hover{
+transform: translateY(-10px) scale(1.03);  /* move up + slightly bigger */
+box-shadow:0 12px 25px rgba(0,0,0,0.2);
+background:#c6d8fd;
+color: rgb(229, 125, 94);
+}
+
+
+.step-no{
+color:#00a8e8;
+margin-bottom:5px;
+}
+
+.step-card h2{
+margin-bottom:10px;
+}
+
+.arrow{
+text-align:center;
+font-size:28px;
+margin:10px 0;
+color:#1b119b;
+}
