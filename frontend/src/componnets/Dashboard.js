@@ -5,6 +5,8 @@ import Working from './Working';
 import Contact from './Contact';
 import About from './About';
 import Footer from './Footer';
+import Upload from './Upload';
+
 
 
 
@@ -66,6 +68,9 @@ export default function Dashboard() {
 </div>
 <div id="contact" style={{ margin: 0, padding: 0, display: 'block' }}>
 <Contact/>
+</div>
+<div id="upload" style={{ margin: 0, padding: 0, display: 'block' }}>
+<Upload/>
 </div>
 <div id="footer" style={{ margin: 0, padding: 0, display: 'block' }}>
 <Footer/>
