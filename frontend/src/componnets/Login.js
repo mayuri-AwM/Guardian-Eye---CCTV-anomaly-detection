@@ -1,12 +1,11 @@
 import React, { useState } from "react";
 import "./login.css";
 import bg from "../photos/bg.png";
-
+import { useNavigate } from "react-router-dom";
 export default function Login() {
-
+const navigate = useNavigate(); 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [emailError, setEmailError] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
 
@@ -15,32 +14,36 @@ export default function Login() {
   const handleEmailChange = (e) => {
     const value = e.target.value;
     setEmail(value);
-
-    // remove error immediately if valid
-    if (emailPattern.test(value)) {
-      setEmailError(false);
-    }
+    if (emailPattern.test(value)) setEmailError(false);
   };
 
   const handlePasswordChange = (e) => {
     const value = e.target.value;
     setPassword(value);
-
-    // remove error immediately if valid
-    if (value.length >= 6) {
-      setPasswordError(false);
-    }
+    if (value.length >= 1) setPasswordError(false);
   };
 
   const validateEmail = () => {
-    if (!emailPattern.test(email)) {
-      setEmailError(true);
-    }
+    if (!emailPattern.test(email)) setEmailError(true);
   };
 
   const validatePassword = () => {
-    if (password.length < 6) {
-      setPasswordError(true);
+    if (password.length < 1) setPasswordError(true);
+  };
+
+  // 3. Create the handleLogin function
+  const handleLogin = () => {
+    const isEmailValid = emailPattern.test(email);
+    const isPasswordValid = password.length >= 1;
+
+    if (isEmailValid && isPasswordValid) {
+  localStorage.setItem("token", "logged-in");       // ← save token
+  localStorage.setItem("username", "Rahul");         // ← save username
+  navigate("/logindash");                            // ← redirect
+} else {
+      // If invalid, show errors
+      if (!isEmailValid) setEmailError(true);
+      if (!isPasswordValid) setPasswordError(true);
     }
   };
 
@@ -80,7 +83,7 @@ export default function Login() {
           {passwordError && <span className="error-icon">!</span>}
         </div>
 
-        <button>Login</button>
+        <button onClick={handleLogin}>Login</button>
 
       </div>
     </div>

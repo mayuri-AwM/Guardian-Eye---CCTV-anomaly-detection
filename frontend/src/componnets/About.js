@@ -27,18 +27,6 @@ const STEPS = [
   },
 ];
 
-const TECH = [
-  { name: "Python",      color: "blue"   },
-  { name: "PyTorch",     color: "coral"  },
-  { name: "OpenCV",      color: "green"  },
-  { name: "React",       color: "teal"   },
-  { name: "Node.js",     color: "green"  },
-  { name: "WebSocket",   color: "amber"  },
-  { name: "PostgreSQL",  color: "blue"   },
-  { name: "Docker",      color: "teal"   },
-  { name: "YOLO v8",     color: "coral"  },
-  { name: "FastAPI",     color: "purple" },
-];
 
 const TEAM = [
   { initials: "MR", name: "Mayuri Raskar",  color: "blue"   },
@@ -53,13 +41,7 @@ const VALUES = [
   { icon: "🔓", title: "Open Core",       desc: "Core detection engine is open source. Audit it, extend it, own it." },
 ];
 
-const TIMELINE = [
-  { version: "v0.1", date: "Jan 2024", label: "Proof of concept — motion detection on single feed" },
-  { version: "v1.0", date: "Apr 2024", label: "Multi-camera support with basic anomaly classifier" },
-  { version: "v1.5", date: "Aug 2024", label: "YOLO v8 integration — 94% accuracy benchmark" },
-  { version: "v2.0", date: "Jan 2025", label: "Real-time WebSocket alerts + React dashboard" },
-  { version: "v2.4", date: "Mar 2025", label: "Edge deployment support + 99.2% accuracy achieved" },
-];
+
 
 
 export default function About() {
@@ -136,8 +118,9 @@ export default function About() {
       </section>
 
       <section className="ab-section ab-dark-section">
-        <div className="ab-section-label">// Core Values</div>
+        <div className="ab-section-label-div">// Core Values</div>
         <div className="ab-values-grid">
+
           {VALUES.map((v) => (
             <div className="ab-value-card" key={v.title}>
               <div className="ab-value-icon">{v.icon}</div>
@@ -149,50 +132,26 @@ export default function About() {
       </section>
 
 
-      <section className="ab-section">
-        <div className="ab-section-label">// Tech Stack</div>
-        <div className="ab-tech-wrap">
-          {TECH.map((t) => (
-            <div className={`ab-tech-badge ab-tech-${t.color}`} key={t.name}>
-              {t.name}
-            </div>
-          ))}
-        </div>
-      </section>
+      
 
 
       <section className="ab-section ab-dark-section">
-        <div className="ab-section-label">// The Team</div>
+    
+        <div className="ab-section-label-div">// The Team</div>
         <div className="ab-team-grid">
           {TEAM.map((m) => (
             <div className="ab-team-card" key={m.name}>
               <div className={`ab-avatar ab-avatar-${m.color}`}>{m.initials}</div>
               <div className="ab-team-name">{m.name}</div>
-
-            </div>
+              </div>
+           
           ))}
         </div>
+        
       </section>
 
 
-      <section className="ab-section">
-        <div className="ab-section-label">// Project Journey</div>
-        <div className="ab-timeline">
-          {TIMELINE.map((t, i) => (
-            <div className="ab-timeline-item" key={i}>
-              <div className="ab-timeline-left">
-                <div className="ab-timeline-version">{t.version}</div>
-                <div className="ab-timeline-date">{t.date}</div>
-              </div>
-              <div className="ab-timeline-dot-wrap">
-                <div className="ab-timeline-dot" />
-                {i < TIMELINE.length - 1 && <div className="ab-timeline-line" />}
-              </div>
-              <div className="ab-timeline-right">{t.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
+      
 
     </div>
   );

@@ -18,13 +18,21 @@
 }
 
 .ab-dark-section {
-  background: #cbd8ec;
+  background: #7497cd;
 }
 
 .ab-section-label {
   font-family: 'Share Tech Mono', monospace;
   font-size: 11px;
   color: #2b6fcf;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 2.5rem;
+}
+.ab-section-label-div {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: #080808;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 2.5rem;

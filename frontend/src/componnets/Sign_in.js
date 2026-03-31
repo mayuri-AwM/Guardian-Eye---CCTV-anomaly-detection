@@ -1,8 +1,18 @@
 import React from "react";
 import "./sign.css";
-import bg from "../photos/bg.png";   // your background image
-
+import bg from "../photos/bg.png";  
+import { useNavigate } from "react-router-dom";
 export default function Sign_in() {
+  const navigate = useNavigate();
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // Here you would normally add your registration logic (API calls, etc.)
+    
+    // Redirect to login
+    navigate("/login");
+  };
   return (
     <div
       className="signup-container"
@@ -13,7 +23,7 @@ export default function Sign_in() {
 
         <h1>Create Account</h1>
 
-        <form>
+        <form onSubmit={handleSubmit}>
 
           <input type="text" placeholder="Full Name" required />
 
@@ -29,7 +39,7 @@ export default function Sign_in() {
 
           <input type="password" placeholder="Confirm Password" required />
 
-          <button type="submit" >Create Account</button>
+          <button type="submit">Create Account</button>
 
           <p className="login-text">
             Already have an account? <a href="/login" >Login</a>

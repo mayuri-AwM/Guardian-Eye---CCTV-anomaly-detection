@@ -69,9 +69,7 @@ export default function Dashboard() {
 <div id="contact" style={{ margin: 0, padding: 0, display: 'block' }}>
 <Contact/>
 </div>
-<div id="upload" style={{ margin: 0, padding: 0, display: 'block' }}>
-<Upload/>
-</div>
+
 <div id="footer" style={{ margin: 0, padding: 0, display: 'block' }}>
 <Footer/>
 </div>

@@ -168,7 +168,7 @@ export default function Upload() {
           DETECTION ENGINE READY
         </div>
         <h1 className="up-title">Video Analysis</h1>
-        <p className="up-sub">// Upload footage · Run AI detection · Review anomalies</p>
+        <p className="up-sub"> Upload footage · Run AI detection · Review anomalies</p>
       </div>
 
       <div className="up-body">
@@ -221,7 +221,7 @@ export default function Upload() {
         {/* ══ UPLOADING ═══════════════════════════════ */}
         {stage === "uploading" && (
           <div className="up-card">
-            <div className="up-card-label">// Uploading to server</div>
+            <div className="up-card-label"> Uploading to server</div>
             <div className="up-file-row">
               <div className="up-file-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
