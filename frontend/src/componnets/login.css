@@ -9,7 +9,15 @@
   align-items: center;
   position: relative; 
 }
-
+.sign p{
+  margin-top: 15px;
+  color: #aaa;
+}
+.sign a{
+  color: #00d4ff;
+  text-decoration: none;
+  font-weight: bold;
+}
 .login-container::before {
   content: '';
   position: absolute;

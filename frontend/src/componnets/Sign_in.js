@@ -2,11 +2,17 @@ import React, { useState } from "react";
 import "./sign.css";
 import bg from "../photos/bg.png";  
 import { useNavigate } from "react-router-dom";
+import { getAuth, createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from "firebase/auth";
+import { app } from "../Firebase";
 
+
+import { doc, setDoc } from "firebase/firestore";
+
+import { db } from "../Firebase";
+const auth = getAuth(app);
 export default function Sign_in() {
   const navigate = useNavigate();
 
-  // ✅ state for inputs
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -15,25 +21,62 @@ export default function Sign_in() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
 
-    // ✅ simple validation
-    if (password !== confirmPassword) {
-      alert("Passwords do not match");
-      return;
-    }
 
-    // 🔥 STORE USERNAME HERE
+const handleSubmit = async (e) => {
+  e.preventDefault();
+
+
+  if (password !== confirmPassword) {
+    alert("Passwords do not match");
+    return;
+  }
+
+  try {
+    //Create user in Firebase Auth (stores email + password)
+  
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+          const user = userCredential.user;
+await sendEmailVerification(user);
+alert("Verification email sent! Please check your inbox and verify before logging in.");
+navigate("/login"); // send to login instead of dashboard
+
+     await updateProfile(user, {
+      displayName: name,
+    });
+    // Store extra user data in Firestore
+    await setDoc(doc(db, "users", user.uid), {
+      name: name,
+      email: email,
+      phone: phone,
+      location: location,
+      occupation: occupation,
+      createdAt: new Date()
+    });
+
+    // 💾 optional local storage
     localStorage.setItem("username", name);
-
-    // optional token
     localStorage.setItem("token", "registered");
 
-    // 👉 redirect to dashboard (or login if you want)
-    navigate("/logindash"); 
-    // OR: navigate("/login");
-  };
+    // 🚀 redirect after success
+    navigate("/logindash");
+
+  } catch (error) {
+    console.log(error.code);
+
+    if (error.code === "auth/email-already-in-use") {
+      alert("Email already registered. Please login.");
+    } else if (error.code === "auth/network-request-failed") {
+      alert("Network error. Try different internet.");
+    } else {
+      alert(error.message);
+    }
+  }
+};
 
   return (
     <div
@@ -103,7 +146,7 @@ export default function Sign_in() {
             required 
           />
 
-          <button type="submit">Create Account</button>
+          <button type="submit" >Create Account</button>
 
           <p className="login-text">
             Already have an account? <a href="/login">Login</a>

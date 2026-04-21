@@ -1,30 +1,12 @@
-import { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./logdash.css";
+import Contactuser from "./Contactuser";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../Firebase";
+import { onAuthStateChanged, getAuth } from "firebase/auth";
+import Footer from "./Footer-dash";
 
-// ─── Upload constants ─────────────────────────────
-const MOCK_RESULTS = {
-  stats: {
-    anomalies: 3,
-    frames: 1200,
-    confidence: 86,
-    duration: "2:12",
-    processingTime: "4.2s",
-  },
-  detections: [
-    { id: 1, type: "Intrusion Detected", confidence: 97, timestamp: "00:04", severity: "critical", color: "#E24B4A" },
-    { id: 2, type: "Loitering",          confidence: 84, timestamp: "00:41", severity: "warning",  color: "#EF9F27" },
-    { id: 3, type: "Abandoned Object",   confidence: 76, timestamp: "01:18", severity: "warning",  color: "#EF9F27" },
-  ],
-  timeline: [
-    { position: 3,  severity: "critical", label: "Intrusion",        time: "00:04" },
-    { position: 31, severity: "warning",  label: "Loitering",        time: "00:41" },
-    { position: 58, severity: "warning",  label: "Abandoned Object", time: "01:18" },
-  ],
-};
-
-const DETECTION_MODES = ["All Anomalies", "Intrusion Only", "Violence / Fight", "Loitering", "Abandoned Object"];
-const SENSITIVITIES   = ["Low", "Medium", "High", "Ultra"];
 const FASTAPI_URL     = "http://localhost:8000";
 
 const STATS = [
@@ -34,18 +16,7 @@ const STATS = [
   { value: "4.2s", label: "Avg Time",   cls: ""      },
 ];
 
-const HISTORY = [
-  { name: "footage_01.mp4",       alerts: 3, status: "critical" },
-  { name: "cam_feed_3.mp4",       alerts: 1, status: "warning"  },
-  { name: "WIN_20251212_Pro.mp4", alerts: 0, status: "clear"    },
-  { name: "test_clip_02.mp4",     alerts: 2, status: "warning"  },
-];
 
-const RECENT = [
-  { id: 1, type: "Intrusion Detected", file: "footage_01.mp4",  time: "2 hrs ago", timestamp: "00:04", severity: "critical", confidence: 97, color: "#f85149" },
-  { id: 2, type: "Loitering",          file: "cam_feed_3.mp4",  time: "5 hrs ago", timestamp: "00:41", severity: "warning",  confidence: 84, color: "#EF9F27" },
-  { id: 3, type: "Abandoned Object",   file: "footage_01.mp4",  time: "2 hrs ago", timestamp: "01:18", severity: "warning",  confidence: 76, color: "#EF9F27" },
-];
 
 // ─── Helper ───────────────────────────────────────
 const fmt = (bytes) =>
@@ -55,6 +26,31 @@ const fmt = (bytes) =>
 
 // ─── Component ────────────────────────────────────
 export default function Login_dash() {
+  const [name, setName] = useState("");
+
+useEffect(() => {
+
+  const auth = getAuth();
+
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+console.log("Auth user:", user);
+    if (user) {
+
+      const docRef = doc(db, "users", user.uid);
+      const docSnap = await getDoc(docRef);
+console.log("Doc exists:", docSnap.exists()); // check if doc found
+      console.log("Doc data:", docSnap.data());
+      if (docSnap.exists()) {
+        setName(docSnap.data().name.split(" ")[0]);
+      }
+
+    }
+
+  });
+
+  return () => unsubscribe();
+
+}, []);
   const navigate = useNavigate();
   const username = localStorage.getItem("username") || "User";
   const initials = username.slice(0, 2).toUpperCase();
@@ -66,14 +62,13 @@ export default function Login_dash() {
   const [processPct, setProcessPct]   = useState(0);
   const [frameCount, setFrameCount]   = useState(0);
   const [dragOver, setDragOver]       = useState(false);
-  const [sensitivity, setSensitivity] = useState("High");
-  const [mode, setMode]               = useState("All Anomalies");
-  const [activeEvent, setActiveEvent] = useState(null);
+  
+
+  // const [activeEvent, setActiveEvent] = useState(null);
   const [uploadError, setUploadError] = useState("");
   const [savedPath, setSavedPath]     = useState("");
 
-  // ── Timeline tooltip state ────────────────────────
-  const [activeTooltip, setActiveTooltip] = useState(null);
+
 
   const fileInputRef = useRef(null);
   const xhrRef       = useRef(null);
@@ -83,7 +78,7 @@ export default function Login_dash() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
-    navigate("/login");
+    navigate("/");
   };
 
   // ── Reset upload ──────────────────────────────────
@@ -95,7 +90,7 @@ export default function Login_dash() {
     setUploadPct(0);
     setProcessPct(0);
     setFrameCount(0);
-    setActiveEvent(null);
+
     setUploadError("");
     setSavedPath("");
   };
@@ -173,6 +168,7 @@ export default function Login_dash() {
   };
 
   return (
+    <div>
     <div className="db-page">
 
       {/* ── Navbar ────────────────────────────────── */}
@@ -182,7 +178,10 @@ export default function Login_dash() {
           Guardian Eye
         </div>
         <div className="db-nav-right">
-       
+        <ul className="navbar-nav ms-auto">
+
+              <a href="#contact" className="nav-link">Contact Us</a>
+              </ul>
           <div className="db-avatar">{initials}</div>
           <button className="db-logout-btn" onClick={handleLogout}>
             Logout
@@ -198,7 +197,7 @@ export default function Login_dash() {
             <div className="db-badge-dot" />
             DETECTION ENGINE READY
           </div>
-          <h1 className="db-intro-title">Welcome back, {username}</h1>
+          <h1 className="db-intro-title">Welcome back,{name}</h1>
           <p className="db-intro-sub">
             // Upload your CCTV footage below to run AI anomaly detection · Results appear instantly
           </p>
@@ -303,22 +302,8 @@ export default function Login_dash() {
                   <span className="up-saved-val">{savedPath}</span>
                 </div>
               )}
-              <div className="up-settings-grid">
-                <div className="up-setting-group">
-                  <label className="up-setting-label">Sensitivity</label>
-                  <div className="up-chip-row">
-                    {SENSITIVITIES.map((s) => (
-                      <button key={s} className={`up-chip${sensitivity === s ? " active" : ""}`} onClick={() => setSensitivity(s)}>{s}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="up-setting-group">
-                  <label className="up-setting-label">Detection Mode</label>
-                  <select className="up-select" value={mode} onChange={(e) => setMode(e.target.value)}>
-                    {DETECTION_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-              </div>
+             
+                
               <div className="up-action-row">
                 <button className="up-btn-primary" onClick={startAnalysis}>Run AI Analysis →</button>
                 <button className="up-btn-ghost" onClick={reset}>Upload Different File</button>
@@ -335,7 +320,7 @@ export default function Login_dash() {
                 <div className="up-scanner-grid">
                   {[...Array(16)].map((_, i) => <div key={i} className="up-scanner-cell" />)}
                 </div>
-                <div className="up-scanner-label">YOLO v8 · {mode} · {sensitivity} sensitivity</div>
+                
               </div>
               <div className="up-proc-row">
                 <span className="up-proc-frame">Frame {frameCount.toLocaleString()} / 1,200</span>
@@ -348,118 +333,24 @@ export default function Login_dash() {
             </div>
           )}
 
-          {/* ══ RESULTS ═══════════════════════════════ */}
-          {stage === "results" && (
-            <>
-              <div className="up-stats-row">
-                <div className="up-stat"><div className="up-stat-val up-stat-danger">{MOCK_RESULTS.stats.anomalies}</div><div className="up-stat-lbl">Anomalies Found</div></div>
-                <div className="up-stat"><div className="up-stat-val">{MOCK_RESULTS.stats.frames.toLocaleString()}</div><div className="up-stat-lbl">Frames Scanned</div></div>
-                <div className="up-stat"><div className="up-stat-val up-stat-success">{MOCK_RESULTS.stats.confidence}%</div><div className="up-stat-lbl">Avg Confidence</div></div>
-                <div className="up-stat"><div className="up-stat-val">{MOCK_RESULTS.stats.duration}</div><div className="up-stat-lbl">Video Duration</div></div>
-                <div className="up-stat"><div className="up-stat-val">{MOCK_RESULTS.stats.processingTime}</div><div className="up-stat-lbl">Processing Time</div></div>
-              </div>
-              <div className="up-results-grid">
-                <div className="up-card up-video-card">
-                  <div className="up-card-label">// Video Preview</div>
-                  <div className="up-video-frame">
-                    <div className="up-video-overlay">
-                      {activeEvent && (
-                        <div className="up-bbox" style={{ borderColor: activeEvent.color }}>
-                          <span className="up-bbox-label" style={{ background: activeEvent.color }}>{activeEvent.type} {activeEvent.confidence}%</span>
-                        </div>
-                      )}
-                      <div className="up-video-play">▶</div>
-                      <div className="up-video-time">{activeEvent ? activeEvent.timestamp : "00:00"} / {MOCK_RESULTS.stats.duration}</div>
-                    </div>
-                  </div>
-                  <div className="up-scrubber">
-                    <div className="up-scrub-track">
-                      {MOCK_RESULTS.timeline.map((ev, i) => (
-                        <div key={i} className={`up-scrub-marker ${ev.severity}`} style={{ left: `${ev.position}%` }} title={`${ev.label} at ${ev.time}`} />
-                      ))}
-                      <div className="up-scrub-head" style={{ left: activeEvent ? `${MOCK_RESULTS.timeline.find(t => t.time === activeEvent.timestamp)?.position || 0}%` : "0%" }} />
-                    </div>
-                    <div className="up-scrub-times"><span>0:00</span><span>0:33</span><span>1:06</span><span>1:39</span><span>2:12</span></div>
-                  </div>
-                </div>
-                <div className="up-card">
-                  <div className="up-card-label">// Detected Anomalies</div>
-                  <div className="up-detect-list">
-                    {MOCK_RESULTS.detections.map((d) => (
-                      <div key={d.id} className={`up-detect-item${activeEvent?.id === d.id ? " active" : ""}`} onClick={() => setActiveEvent(activeEvent?.id === d.id ? null : d)}>
-                        <div className="up-detect-dot" style={{ background: d.color }} />
-                        <div className="up-detect-info">
-                          <div className="up-detect-type">{d.type}</div>
-                          <div className="up-detect-time">at {d.timestamp}</div>
-                        </div>
-                        <div className="up-detect-right">
-                          <div className={`up-conf-badge ${d.severity}`}>{d.confidence}%</div>
-                          <div className="up-detect-arrow">→</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="up-card-label" style={{ marginTop: "1.2rem" }}>// Event Timeline</div>
-                  <div className="up-timeline-bar">
-                    <div className="up-tl-track">
-                      {MOCK_RESULTS.timeline.map((ev, i) => (
-                        <div key={i} className={`up-tl-marker ${ev.severity}`} style={{ left: `${ev.position}%` }} title={ev.time}
-                          onClick={() => { const det = MOCK_RESULTS.detections.find(d => d.timestamp === ev.time); setActiveEvent(det || null); }}>
-                          <div className="up-tl-tooltip">{ev.label}<br />{ev.time}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="up-tl-times"><span>0:00</span><span>1:06</span><span>2:12</span></div>
-                  </div>
-                </div>
-              </div>
-              <div className="up-export-bar">
-                <div className="up-card-label" style={{ marginBottom: "0.8rem" }}>// Export &amp; Actions</div>
-                <div className="up-export-btns">
-                  <button className="up-btn-primary">Download Report (PDF)</button>
-                  <button className="up-btn-secondary">Export JSON</button>
-                  <button className="up-btn-secondary">Save to Dashboard</button>
-                  <button className="up-btn-ghost" onClick={reset}>Upload New Video</button>
-                </div>
-              </div>
-            </>
-          )}
+         {/* ══ RESULTS ═══════════════════════════════ */}
+
+{stage === "results" && (
+  <div className="up-card" style={{ textAlign: "center", padding: "3rem" }}>
+    <h2 style={{ color: "#fff" }}>Results</h2>
+  </div>
+)}
         </div>
 
-        {/* ── Recent Detections ─────────────────────── */}
-        <div className="db-section-header">
-          <div className="db-section-tag">Recent Detections</div>
-          <p className="db-section-desc">Latest anomalies found across all your videos</p>
-        </div>
-        <div className="db-card">
-          {RECENT.map((d) => (
-            <div className="db-detect-item" key={d.id}>
-              <div className="db-detect-dot" style={{ background: d.color }} />
-              <div className="db-detect-info">
-                <div className="db-detect-type">{d.type}</div>
-                <div className="db-detect-meta">{d.file} · {d.time} · at {d.timestamp}</div>
-              </div>
-              <div className={`db-badge ${d.severity}`}>{d.confidence}%</div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Upload History ────────────────────────── */}
-        <div className="db-section-header">
-          <div className="db-section-tag">Upload History</div>
-          <p className="db-section-desc">All videos you have analysed</p>
-        </div>
-        <div className="db-card" style={{ marginBottom: "3rem" }}>
-          {HISTORY.map((h, i) => (
-            <div className="db-history-item" key={i}>
-              <div className="db-history-name">{h.name}</div>
-              <div className="db-history-alerts">{h.alerts} alert{h.alerts !== 1 ? "s" : ""}</div>
-              <div className={`db-badge ${h.status}`}>{h.status}</div>
-            </div>
-          ))}
-        </div>
-
+       
       </div>
-    </div>
+      </div>
+      <div id="contact" style={{ margin: 0, padding: 0, display: 'block' }}>
+      <Contactuser/>
+      </div>
+ <div id="footerdash" style={{ margin: 0, padding: 0, overflow: 'hidden' }}>
+<Footer/>
+</div>
+  </div>  
   );
 }

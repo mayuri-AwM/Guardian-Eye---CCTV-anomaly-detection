@@ -5,7 +5,7 @@ import Working from './Working';
 import Contact from './Contact';
 import About from './About';
 import Footer from './Footer';
-import Upload from './Upload';
+import { Link } from "react-router-dom";
 
 
 
@@ -49,11 +49,15 @@ export default function Dashboard() {
       Stay aware, respond faster, and maintain a safer environment.
     </p>
 
-    <div className='btn-dash'>
-      <button>Get Started</button>
-      <button>Learn More</button>
-    </div>
+   <div className='btn-dash'>
+  <Link to="/sign_in">
+    <button>Get Started</button>
+  </Link>
 
+    <a href="#working">
+    <button>Learn More</button>
+  </a>
+</div>
   </div>
 
 </div>
