@@ -1,0 +1,20 @@
+fastapi==0.111.0
+uvicorn==0.29.0
+python-multipart==0.0.9
+aiofiles==23.2.1
+
+# Computer Vision
+opencv-python==4.9.0.80
+
+
+# Core ML
+numpy==1.26.4
+
+# YOLO (PyTorch stack)
+torch==2.2.2
+torchvision==0.17.2
+torchaudio==2.2.2
+ultralytics==8.2.0
+
+# LRCN (TensorFlow stack)
+tensorflow==2.15.0

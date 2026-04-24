@@ -1,33 +1,42 @@
-from fastapi import FastAPI, UploadFile, File
+"""
+Guardian Eye — FastAPI backend entry point.
+
+Run:
+    uvicorn main:app --reload --port 8000
+"""
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import os, shutil, uuid
+from routers import video
 
-app = FastAPI()
+app = FastAPI(
+    title="Guardian Eye API",
+    description="CCTV crime and weapon detection backend",
+    version="1.0.0",
+)
 
-# Allow React frontend
+# Allow the React dev server
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Upload folder
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# Register routers
+# /upload-video and /analyze live directly under root to match the existing frontend
+app.include_router(video.router, prefix="/api/video", tags=["video"])
 
-# Upload API
-@app.post("/upload-video")
-async def upload_video(file: UploadFile = File(...)):
-    # unique filename (important)
-    unique_name = f"{uuid.uuid4()}_{file.filename}"
-    file_path = os.path.join(UPLOAD_DIR, unique_name)
+# Also expose /upload-video at root level (matches the existing frontend XHR call)
+app.include_router(video.router, tags=["video-compat"])
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
 
-    return {
-        "filename": file.filename,
-        "status": "saved",
-        "path": file_path
-    }
+@app.get("/", tags=["health"])
+def health():
+    return {"status": "Guardian Eye API running"}
+
+
+@app.get("/health", tags=["health"])
+def health_check():
+    return {"status": "ok", "version": "1.0.0"}
