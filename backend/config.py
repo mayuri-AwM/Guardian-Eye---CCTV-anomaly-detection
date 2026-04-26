@@ -2,7 +2,7 @@ import os
 
 # ── Model Paths ────────────────────────────────────────────────────────────────
 # Update these paths to match where your model files are stored on your machine
-YOLO_MODEL_PATH = r"D:\projects\edp\Guardian-Eye---CCTV-anomaly-detection\object_detection\combined_gunsnknifes\runs\detect\train\weights\best.pt"
+YOLO_MODEL_PATH = r"D:\projects\edp\Guardian-Eye---CCTV-anomaly-detection\best.pt"
 LRCN_MODEL_PATH   = r"D:\projects\edp\Guardian-Eye---CCTV-anomaly-detection\best_lrcn_model.h5"
 
 # ── Detection Settings ─────────────────────────────────────────────────────────
