@@ -46,14 +46,8 @@ Thumbs.db
 # Uploads / Generated files
 # ----------------------
 backend/uploads/
+.env
 
-# # ----------------------
-# # ML Models (optional)
-# # ----------------------
-# *.h5
-# *.pt
-# *.pth
-# *.onnx
 
 # ----------------------
 # Database

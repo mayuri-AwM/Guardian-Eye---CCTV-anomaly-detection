@@ -1,126 +1,182 @@
 """
-Crime classifier using the trained LRCN model (best_lrcn_model.h5).
-Classifies a sequence of frames into one of the crime categories.
+backend/models/classifier.py
+Loads the .pth checkpoint using LRCN_MODEL_PATH from config.py.
 """
 
 import numpy as np
 import cv2
-import base64
-import tensorflow as tf
-from tensorflow.keras.models import load_model
-from tensorflow.keras.layers import InputLayer
-from tensorflow.keras.mixed_precision import Policy
+import torch
+import torch.nn as nn
+import torchvision.models as tv_models
+from typing import List, Dict
 
-from config import (
-    LRCN_MODEL_PATH,
-    CRIME_CLASSES,
-    SEQUENCE_LENGTH,
-    LRCN_IMG_HEIGHT,
-    LRCN_IMG_WIDTH,
-)
+from config import LRCN_MODEL_PATH, CRIME_CLASSES, SEQ_LEN, IMG_SIZE
 
-# ─────────────────────────────────────────────────────────────
-# 🔥 FIX 1: Patch for old models using 'batch_shape'
-# This handles the transition from Keras 2 to Keras 3
-# ─────────────────────────────────────────────────────────────
-_original_init = InputLayer.__init__
 
-def patched_init(self, *args, **kwargs):
-    if "batch_shape" in kwargs:
-        kwargs["batch_input_shape"] = kwargs.pop("batch_shape")
-    _original_init(self, *args, **kwargs)
+# ── 1.  Model definition ───────────────────────────────────────────────────────
+#        Must exactly match Cell 16 of guardian_eye_pytorch_v2.ipynb
 
-InputLayer.__init__ = patched_init
-# ─────────────────────────────────────────────────────────────
+class LRCNModel(nn.Module):
+    def __init__(self, num_classes: int, seq_len: int, img_size: int):
+        super().__init__()
+        self.seq_len = seq_len
 
+        backbone          = tv_models.mobilenet_v3_small(weights=None)
+        self.cnn          = backbone.features
+        self.pool         = nn.AdaptiveAvgPool2d(1)
+        self.cnn_out_size = 576
+
+        self.lstm = nn.LSTM(
+            input_size    = self.cnn_out_size,
+            hidden_size   = 256,
+            num_layers    = 2,
+            batch_first   = True,
+            dropout       = 0.4,
+            bidirectional = True,
+        )
+
+        lstm_out = 256 * 2  # 512
+        self.classifier = nn.Sequential(
+            nn.LayerNorm(lstm_out),
+            nn.Linear(lstm_out, 256),
+            nn.GELU(),
+            nn.Dropout(0.4),
+            nn.Linear(256, 128),
+            nn.GELU(),
+            nn.Dropout(0.3),
+            nn.Linear(128, num_classes),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, S, C, H, W = x.shape
+        x = x.view(B * S, C, H, W)
+        x = self.cnn(x)
+        x = self.pool(x)
+        x = x.view(B * S, -1)
+        x = x.view(B, S, -1)
+        x, _ = self.lstm(x)
+        x = x[:, -1, :]
+        return self.classifier(x)
+
+
+# ── 2.  Preprocessing helpers ─────────────────────────────────────────────────
+
+def _apply_clahe(frame_bgr: np.ndarray) -> np.ndarray:
+    lab     = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe   = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l       = clahe.apply(l)
+    return cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2BGR)
+
+
+def _apply_sharpen(frame_bgr: np.ndarray) -> np.ndarray:
+    blur = cv2.GaussianBlur(frame_bgr, (0, 0), 3)
+    return cv2.addWeighted(frame_bgr, 1.5, blur, -0.5, 0)
+
+
+def _preprocess_frame(frame_bgr: np.ndarray) -> np.ndarray:
+    """CLAHE + sharpen + BGR->RGB. Input must be uint8."""
+    frame = _apply_clahe(frame_bgr)
+    frame = _apply_sharpen(frame)
+    return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+
+# ── 3.  CrimeClassifier ───────────────────────────────────────────────────────
 
 class CrimeClassifier:
+    """
+    Loads LRCN_MODEL_PATH from config and exposes .classify(frames).
+    frames: list of BGR uint8 numpy arrays from frame_extractor.py
+    """
+
     def __init__(self):
-        print(f"[Classifier] Loading LRCN model from: {LRCN_MODEL_PATH}")
+        self.device   = "cuda" if torch.cuda.is_available() else "cpu"
+        self.classes  = CRIME_CLASSES   # from config.py
+        self.seq_len  = SEQ_LEN         # from config.py  (16)
+        self.img_size = IMG_SIZE        # from config.py  (128)
 
-        try:
-            # 🔥 FIX 2: Added DTypePolicy to custom_objects
-            # This solves the "Unknown layer: DTypePolicy" or serialization error.
-            self.model = load_model(
-                LRCN_MODEL_PATH,
-                compile=False,
-                custom_objects={
-                    "DTypePolicy": Policy,
-                    "InputLayer": InputLayer
-                }
-            )
-        except Exception as e:
-            print(f"[Classifier] Error loading model: {e}")
-            raise e
+        print(f"[CrimeClassifier] Loading on {self.device}")
+        print(f"[CrimeClassifier] Path: {LRCN_MODEL_PATH}")
 
-        self.sequence_length = SEQUENCE_LENGTH
-        self.img_h           = LRCN_IMG_HEIGHT
-        self.img_w           = LRCN_IMG_WIDTH
+        ckpt = torch.load(LRCN_MODEL_PATH, map_location=self.device)
 
-        # Verify input shape
-        if hasattr(self.model, 'input_shape'):
-            print(f"[Classifier] Model input shape : {self.model.input_shape}")
-        
-        print(f"[Classifier] LRCN model ready  ✓")
+        # Read seq_len / img_size / classes from checkpoint if present;
+        # fall back to config.py values so old checkpoints still work.
+        if "config" in ckpt:
+            cfg           = ckpt["config"]
+            self.seq_len  = cfg.get("seq_len",      self.seq_len)
+            self.img_size = cfg.get("img_h",         self.img_size)
+            self.classes  = cfg.get("classes_list",  self.classes)
 
-    # ── Pre-processing ────────────────────────────────────────
-    def _preprocess(self, frames: list[np.ndarray]) -> np.ndarray:
+        self.model = LRCNModel(
+            num_classes = len(self.classes),
+            seq_len     = self.seq_len,
+            img_size    = self.img_size,
+        ).to(self.device)
+
+        self.model.load_state_dict(ckpt["model_state"])
+        self.model.eval()
+
+        print(f"[CrimeClassifier] Ready — seq_len={self.seq_len}  "
+              f"img_size={self.img_size}  classes={self.classes}")
+
+    # ── Public method called by video.py ──────────────────────────────────────
+
+    def classify(self, frames: List[np.ndarray]) -> Dict:
         """
-        Resize, normalise, and select SEQUENCE_LENGTH evenly-spaced frames.
-        Returns ndarray of shape (1, SEQUENCE_LENGTH, H, W, 3).
+        frames: list of BGR uint8 arrays from cv2.VideoCapture / frame_extractor.
+        Returns dict with keys: prediction, crime, crime_type, confidence,
+                                all_probabilities
         """
-        n = len(frames)
-        if n == 0:
-            raise ValueError("No frames provided to classifier.")
-
-        # Evenly-spaced indices across available frames
-        indices  = np.linspace(0, n - 1, self.sequence_length, dtype=int)
-        selected = [frames[i] for i in indices]
+        if not frames:
+            return self._empty_result()
 
         processed = []
-        for f in selected:
-            resized    = cv2.resize(f, (self.img_w, self.img_h))
-            rgb        = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-            normalised = rgb.astype(np.float32) / 255.0
-            processed.append(normalised)
+        for f in frames:
+            # Accept both uint8 and float32 [0,1]
+            if f.dtype != np.uint8:
+                f = (np.clip(f, 0, 1) * 255).astype(np.uint8)
 
-        # (1, seq, H, W, 3)
-        return np.expand_dims(np.array(processed), axis=0)
+            f = _preprocess_frame(f)    # BGR uint8 -> RGB uint8
 
-    # ── Inference ─────────────────────────────────────────────
-    def classify(self, frames: list[np.ndarray]) -> dict:
-        """
-        Classify a list of BGR frames.
-        """
-        input_data  = self._preprocess(frames)
+            f = cv2.resize(f, (self.img_size, self.img_size),
+                           interpolation=cv2.INTER_LANCZOS4)
+            processed.append(f.astype(np.float32) / 255.0)
 
-        predictions = self.model.predict(input_data, verbose=0)[0]
+        # Pad or trim to exactly seq_len
+        while len(processed) < self.seq_len:
+            processed.append(processed[-1].copy())
+        processed = processed[:self.seq_len]
 
-        num_classes = min(len(predictions), len(CRIME_CLASSES))
-        predictions = predictions[:num_classes]
+        # Build tensor  (1, S, 3, H, W)
+        x = np.stack(processed)                        # (S, H, W, 3)
+        x = torch.from_numpy(x).permute(0, 3, 1, 2)   # (S, 3, H, W)
+        x = x.unsqueeze(0).to(self.device)             # (1, S, 3, H, W)
 
-        # Apply Softmax if the model outputs raw logits
-        if predictions.max() > 1.0 or predictions.min() < 0.0:
-            predictions = tf.nn.softmax(predictions).numpy()
+        with torch.no_grad():
+            logits = self.model(x)
+            probs  = torch.softmax(logits, dim=1)[0].cpu().numpy()
 
-        class_idx  = int(np.argmax(predictions))
-        crime_type = CRIME_CLASSES[class_idx]
-        confidence = float(predictions[class_idx])
-
-        all_scores = {
-            CRIME_CLASSES[i]: round(float(predictions[i]), 4)
-            for i in range(num_classes)
-        }
+        pred_idx   = int(probs.argmax())
+        pred_class = self.classes[pred_idx]
+        confidence = float(probs[pred_idx])
 
         return {
-            "crime_type": crime_type,
-            "confidence": round(confidence, 3),
-            "all_scores": all_scores,
-            "is_anomaly": crime_type != "Normal",
+            "prediction":        pred_class,
+            "crime":             pred_class,   # video.py: .get("crime")
+            "crime_type":        pred_class,   # video.py: .get("crime_type")
+            "confidence":        round(confidence, 4),
+            "all_probabilities": {
+                c: round(float(p), 4)
+                for c, p in zip(self.classes, probs)
+            },
         }
 
-    # ── Utility ───────────────────────────────────────────────
-    @staticmethod
-    def frame_to_b64(frame: np.ndarray) -> str:
-        _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        return base64.b64encode(buf).decode("utf-8")
+    def _empty_result(self) -> Dict:
+        return {
+            "prediction":        "normal",
+            "crime":             "normal",
+            "crime_type":        "normal",
+            "confidence":        0.0,
+            "all_probabilities": {c: 0.0 for c in self.classes},
+        }

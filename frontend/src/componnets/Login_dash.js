@@ -9,13 +9,6 @@ import Footer from "./Footer-dash";
 
 const FASTAPI_URL = "http://localhost:8000";
 
-const STATS = [
-  { value: "7",    label: "Anomalies",  cls: "red"   },
-  { value: "12",   label: "Videos",     cls: "blue"  },
-  { value: "86%",  label: "Confidence", cls: "green" },
-  { value: "4.2s", label: "Avg Time",   cls: ""      },
-];
-
 // ─── Severity config ───────────────────────────────────────────────────────
 const SEVERITY_CONFIG = {
   CRITICAL: { color: "#ff2d55", bg: "rgba(255,45,85,0.12)",   icon: "🚨", label: "CRITICAL" },
@@ -25,12 +18,22 @@ const SEVERITY_CONFIG = {
 };
 
 const CRIME_COLORS = {
-  Normal:      "#4cd964",
-  Shoplifting: "#f5a623",
-  Fighting:    "#ff6b00",
-  Burglary:    "#ff6b00",
-  Kidnapping:  "#ff2d55",
-  Robbery:     "#ff2d55",
+  Normal:       "#4cd964",
+  normal:       "#4cd964",
+  Shoplifting:  "#f5a623",
+  shoplifting:  "#f5a623",
+  Fighting:     "#ff6b00",
+  fighting:     "#ff6b00",
+  Burglary:     "#ff6b00",
+  burglary:     "#ff6b00",
+  Kidnapping:   "#ff2d55",
+  kidnapping:   "#ff2d55",
+  Robbery:      "#ff2d55",
+  robbery:      "#ff2d55",
+  shooting:     "#ff2d55",
+  explosion:    "#ff6b00",
+  roadaccidents:"#f5a623",
+  stealing:     "#f5a623",
 };
 
 // ─── Helper ────────────────────────────────────────────────────────────────
@@ -39,9 +42,22 @@ const fmt = (bytes) =>
     ? (bytes / (1024 * 1024)).toFixed(1) + " MB"
     : (bytes / 1024).toFixed(0) + " KB";
 
+const capitalize = (s) =>
+  s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+
 // ─── Component ────────────────────────────────────────────────────────────
 export default function Login_dash() {
   const [name, setName] = useState("");
+
+  // ── Session stats (dynamic) ───────────────────────────────────────────────
+  const [sessionStats, setSessionStats] = useState({
+    anomalies: 0,
+    videos: 0,
+    avgConfidence: null,   // null → not yet computed
+    avgTime: null,         // null → not yet computed
+  });
+  const confAccum  = useRef([]);   // accumulates crime_confidence per analysis
+  const timeAccum  = useRef([]);   // accumulates elapsed ms per analysis
 
   useEffect(() => {
     const auth = getAuth();
@@ -64,6 +80,7 @@ export default function Login_dash() {
   // ── Upload / pipeline state ──────────────────────────────────────────────
   const [stage,       setStage]       = useState("idle");
   const [file,        setFile]        = useState(null);
+  const [videoObjectURL, setVideoObjectURL] = useState(null); // for <video> preview
   const [uploadPct,   setUploadPct]   = useState(0);
   const [dragOver,    setDragOver]    = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -77,6 +94,7 @@ export default function Login_dash() {
 
   const fileInputRef = useRef(null);
   const xhrRef       = useRef(null);
+  const startTimeRef = useRef(null);
 
   // ── Logout ────────────────────────────────────────────────────────────────
   const handleLogout = () => {
@@ -88,8 +106,10 @@ export default function Login_dash() {
   // ── Reset ──────────────────────────────────────────────────────────────────
   const reset = () => {
     if (xhrRef.current) xhrRef.current.abort();
+    if (videoObjectURL) URL.revokeObjectURL(videoObjectURL);
     setStage("idle");
     setFile(null);
+    setVideoObjectURL(null);
     setUploadPct(0);
     setUploadError("");
     setSavedPath("");
@@ -113,6 +133,7 @@ export default function Login_dash() {
     }
     setUploadError("");
     setFile(f);
+    setVideoObjectURL(URL.createObjectURL(f)); // 🎥 create preview URL
     setStage("uploading");
     setUploadPct(0);
 
@@ -144,9 +165,9 @@ export default function Login_dash() {
       setStage("idle");
     };
 
-    xhr.open("POST", `${FASTAPI_URL}/upload-video`);
+    xhr.open("POST", `${FASTAPI_URL}/api/video/upload-video`);
     xhr.send(formData);
-  }, []);
+  }, [videoObjectURL]);
 
   const onDragOver  = (e) => { e.preventDefault(); setDragOver(true); };
   const onDragLeave = ()  => setDragOver(false);
@@ -160,9 +181,10 @@ export default function Login_dash() {
     setAnalyzing(true);
     setAnalyzeErr("");
     setResults(null);
+    startTimeRef.current = Date.now();
 
     try {
-      const res = await fetch(`${FASTAPI_URL}/analyze`, {
+      const res = await fetch(`${FASTAPI_URL}/api/video/analyze`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ path: savedPath }),
@@ -174,20 +196,92 @@ export default function Login_dash() {
       }
 
       const data = await res.json();
-      setResults(data);
+      const elapsed = (Date.now() - startTimeRef.current) / 1000;
+
+      // ── Normalise backend field names ──────────────────────────────
+      // Backend returns: weapon, weapon_confidence, crime, crime_confidence, severity, frame_path
+      // Frontend expects: weapon_detected, crime_type — so we normalise here
+      const normalised = {
+        ...data,
+        weapon_detected:   data.weapon   ?? data.weapon_detected  ?? "none",
+        crime_type:        data.crime    ?? data.crime_type        ?? "Unknown",
+        weapon_confidence: data.weapon_confidence ?? 0,
+        crime_confidence:  data.crime_confidence  ?? 0,
+        severity:          data.severity           ?? "LOW",
+        frame_path:        data.frame_path         ?? null,
+        // optional extended fields (absent in basic backend — handled gracefully)
+        all_scores:        data.all_scores         ?? null,
+        preview_frames:    data.preview_frames     ?? null,
+        best_frame_b64:    data.best_frame_b64     ?? null,
+        video_info:        data.video_info         ?? null,
+        frames_analysed:   data.frames_analysed    ?? null,
+      };
+
+      // ── Update session stats ────────────────────────────────────────
+      const isAnomaly = normalised.crime_type.toLowerCase() !== "normal";
+      confAccum.current.push(normalised.crime_confidence);
+      timeAccum.current.push(elapsed);
+      const avgConf = confAccum.current.reduce((a, b) => a + b, 0) / confAccum.current.length;
+      const avgTime = timeAccum.current.reduce((a, b) => a + b, 0) / timeAccum.current.length;
+
+      setSessionStats((prev) => ({
+        anomalies:     prev.anomalies + (isAnomaly ? 1 : 0),
+        videos:        prev.videos + 1,
+        avgConfidence: avgConf,
+        avgTime:       avgTime,
+      }));
+
+      setResults(normalised);
       setActiveFrame(0);
       setStage("results");
     } catch (e) {
       setAnalyzeErr(e.message || "Analysis failed. Check server logs.");
-      setStage("settings");   // Go back to settings so user can retry
+      setStage("settings");
     } finally {
       setAnalyzing(false);
     }
   };
 
   // ── Derived values from results ────────────────────────────────────────────
-  const sev     = results ? (SEVERITY_CONFIG[results.severity] || SEVERITY_CONFIG.LOW) : null;
+  const sev      = results ? (SEVERITY_CONFIG[results.severity] || SEVERITY_CONFIG.LOW) : null;
   const crimeCol = results ? (CRIME_COLORS[results.crime_type] || "#fff") : "#fff";
+
+  // ── Build dynamic stats row ────────────────────────────────────────────────
+  const STATS = [
+    {
+      value: sessionStats.anomalies.toString(),
+      label: "Anomalies",
+      cls: sessionStats.anomalies > 0 ? "red" : "",
+    },
+    {
+      value: sessionStats.videos.toString(),
+      label: "Videos",
+      cls: "blue",
+    },
+    {
+      value: sessionStats.avgConfidence !== null
+        ? `${(sessionStats.avgConfidence * 100).toFixed(0)}%`
+        : "—",
+      label: "Confidence",
+      cls: "green",
+    },
+    {
+      value: sessionStats.avgTime !== null
+        ? `${sessionStats.avgTime.toFixed(1)}s`
+        : "—",
+      label: "Avg Time",
+      cls: "",
+    },
+  ];
+
+  // ── Generate alert message from data ──────────────────────────────────────
+  const buildAlertMsg = (r) => {
+    if (!r) return "";
+    const weapon = r.weapon_detected !== "none"
+      ? `${capitalize(r.weapon_detected)} detected`
+      : "No weapon detected";
+    return `${weapon} · Activity: ${capitalize(r.crime_type)} · Severity: ${r.severity}`;
+  };
 
   return (
     <div>
@@ -222,7 +316,7 @@ export default function Login_dash() {
             </p>
           </div>
 
-          {/* ── Stats ───────────────────────────────────────────────────────── */}
+          {/* ── Stats (dynamic) ─────────────────────────────────────────────── */}
           <div className="db-stats-row">
             {STATS.map((s) => (
               <div className="db-stat" key={s.label}>
@@ -321,6 +415,27 @@ export default function Login_dash() {
                     <span className="up-saved-val">{savedPath}</span>
                   </div>
                 )}
+
+                {/* 🎥 Video preview */}
+                {videoObjectURL && (
+                  <div style={{ marginBottom: "1.4rem" }}>
+                    <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "0.6rem", fontFamily: "'Share Tech Mono', monospace" }}>
+                      VIDEO PREVIEW
+                    </div>
+                    <video
+                      src={videoObjectURL}
+                      controls
+                      style={{
+                        width: "100%",
+                        borderRadius: "8px",
+                        border: "0.5px solid #30363d",
+                        background: "#0d1117",
+                        maxHeight: "240px",
+                      }}
+                    />
+                  </div>
+                )}
+
                 {analyzeErr && (
                   <div className="up-error-banner" style={{ marginTop: "1rem" }}>
                     <span>✕</span><span>{analyzeErr}</span>
@@ -339,7 +454,7 @@ export default function Login_dash() {
                   <div>🧠 LRCN — crime classification (6 classes)</div>
                   <div>⚡ Results include severity level + annotated frames</div>
                 </div>
-                <div className="up-action-row">
+                <div className="up-action-row" style={{ marginTop: "1.2rem" }}>
                   <button className="up-btn-primary" onClick={startAnalysis} disabled={analyzing}>
                     {analyzing ? "Analysing…" : "Run AI Analysis →"}
                   </button>
@@ -352,6 +467,52 @@ export default function Login_dash() {
             {stage === "processing" && (
               <div className="up-card up-processing-card">
                 <div className="up-card-label">// Running AI pipeline</div>
+
+                {/* 🎥 Live video card with detection overlay */}
+                {videoObjectURL && (
+                  <div style={{ position: "relative", marginBottom: "1.4rem", borderRadius: "10px", overflow: "hidden", border: "1px solid rgba(88,166,255,0.3)" }}>
+                    <video
+                      src={videoObjectURL}
+                      autoPlay
+                      muted
+                      loop
+                      style={{ width: "100%", display: "block", maxHeight: "260px", objectFit: "cover" }}
+                    />
+                    {/* Scanning overlay */}
+                    <div style={{
+                      position: "absolute", inset: 0,
+                      background: "linear-gradient(180deg, transparent 0%, rgba(88,166,255,0.08) 50%, transparent 100%)",
+                      animation: "up-scan 2s linear infinite",
+                      pointerEvents: "none",
+                    }} />
+                    {/* LIVE badge */}
+                    <div style={{
+                      position: "absolute", top: "10px", left: "10px",
+                      background: "rgba(255,45,85,0.85)", color: "#fff",
+                      fontFamily: "'Share Tech Mono', monospace", fontSize: "10px",
+                      padding: "3px 9px", borderRadius: "4px", letterSpacing: "0.1em",
+                      display: "flex", alignItems: "center", gap: "5px",
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", display: "inline-block", animation: "db-pulse 1s infinite" }} />
+                      ANALYZING
+                    </div>
+                    {/* Corner brackets */}
+                    {[["top:6px","left:6px","borderTop","borderLeft"],
+                      ["top:6px","right:6px","borderTop","borderRight"],
+                      ["bottom:6px","left:6px","borderBottom","borderLeft"],
+                      ["bottom:6px","right:6px","borderBottom","borderRight"]].map(([t,l,b1,b2], i) => (
+                      <div key={i} style={{
+                        position: "absolute",
+                        [t.split(":")[0]]: t.split(":")[1],
+                        [l.split(":")[0]]: l.split(":")[1],
+                        width: 18, height: 18,
+                        [b1]: "2px solid #58a6ff",
+                        [b2]: "2px solid #58a6ff",
+                      }} />
+                    ))}
+                  </div>
+                )}
+
                 <div className="up-scanner">
                   <div className="up-scanner-line" />
                   <div className="up-scanner-grid">
@@ -394,12 +555,50 @@ export default function Login_dash() {
                       SEVERITY — {sev.label}
                     </div>
                     <div style={{ color: "#fff", fontSize: "0.9rem", lineHeight: 1.4 }}>
-                      {results.alert_message}
+                      {buildAlertMsg(results)}
                     </div>
                   </div>
                 </div>
 
                 <div style={{ padding: "1.6rem" }}>
+
+                  {/* 🎥 Video replay with detection result overlay */}
+                  {videoObjectURL && (
+                    <div style={{ marginBottom: "1.6rem" }}>
+                      <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "0.6rem", fontFamily: "'Share Tech Mono', monospace" }}>
+                        VIDEO — LIVE DETECTION REPLAY
+                      </div>
+                      <div style={{ position: "relative", borderRadius: "10px", overflow: "hidden", border: `1px solid ${sev.color}44` }}>
+                        <video
+                          src={videoObjectURL}
+                          controls
+                          style={{ width: "100%", display: "block", maxHeight: "300px", objectFit: "cover" }}
+                        />
+                        {/* Severity badge overlay */}
+                        <div style={{
+                          position: "absolute", top: "10px", right: "10px",
+                          background: sev.bg,
+                          border: `1px solid ${sev.color}`,
+                          color: sev.color,
+                          fontFamily: "'Share Tech Mono', monospace", fontSize: "11px",
+                          padding: "4px 10px", borderRadius: "5px", letterSpacing: "0.1em",
+                        }}>
+                          {sev.icon} {sev.label}
+                        </div>
+                        {/* Weapon badge if detected */}
+                        {results.weapon_detected !== "none" && (
+                          <div style={{
+                            position: "absolute", top: "10px", left: "10px",
+                            background: "rgba(255,45,85,0.85)", color: "#fff",
+                            fontFamily: "'Share Tech Mono', monospace", fontSize: "10px",
+                            padding: "3px 9px", borderRadius: "4px", letterSpacing: "0.08em",
+                          }}>
+                            🔫 {capitalize(results.weapon_detected)} DETECTED
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Two-column: Weapon + Crime */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
@@ -425,7 +624,7 @@ export default function Login_dash() {
                       }}>
                         {results.weapon_detected === "none" ? "None Detected" : results.weapon_detected}
                       </div>
-                      {results.weapon_detected !== "none" && (
+                      {results.weapon_detected !== "none" && results.weapon_confidence > 0 && (
                         <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.8rem" }}>
                           Confidence: {(results.weapon_confidence * 100).toFixed(1)}%
                         </div>
@@ -448,7 +647,7 @@ export default function Login_dash() {
                         color: crimeCol,
                         marginBottom: "0.3rem",
                       }}>
-                        {results.crime_type}
+                        {capitalize(results.crime_type)}
                       </div>
                       <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.8rem" }}>
                         Confidence: {(results.crime_confidence * 100).toFixed(1)}%
@@ -456,7 +655,7 @@ export default function Login_dash() {
                     </div>
                   </div>
 
-                  {/* Class probability bars */}
+                  {/* Class probability bars — only if backend sends all_scores */}
                   {results.all_scores && (
                     <div style={{ marginBottom: "1.5rem" }}>
                       <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "0.8rem" }}>
@@ -468,7 +667,7 @@ export default function Login_dash() {
                           .map(([label, score]) => (
                           <div key={label} style={{ display: "flex", alignItems: "center", gap: "0.8rem" }}>
                             <div style={{ width: "90px", fontSize: "0.78rem", color: "rgba(255,255,255,0.6)", flexShrink: 0 }}>
-                              {label}
+                              {capitalize(label)}
                             </div>
                             <div style={{ flex: 1, height: "6px", background: "rgba(255,255,255,0.08)", borderRadius: "3px", overflow: "hidden" }}>
                               <div style={{
@@ -488,14 +687,12 @@ export default function Login_dash() {
                     </div>
                   )}
 
-                  {/* Annotated frame previews */}
+                  {/* Annotated frame previews — only if backend sends preview_frames */}
                   {results.preview_frames && results.preview_frames.length > 0 && (
                     <div style={{ marginBottom: "1.5rem" }}>
                       <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "0.8rem" }}>
                         DETECTION FRAMES
                       </div>
-
-                      {/* Main frame */}
                       <div style={{ borderRadius: "10px", overflow: "hidden", marginBottom: "0.6rem", border: "1px solid rgba(255,255,255,0.1)" }}>
                         <img
                           src={`data:image/jpeg;base64,${results.preview_frames[activeFrame]}`}
@@ -503,8 +700,6 @@ export default function Login_dash() {
                           style={{ width: "100%", display: "block" }}
                         />
                       </div>
-
-                      {/* Thumbnail strip */}
                       <div style={{ display: "flex", gap: "0.5rem" }}>
                         {results.preview_frames.map((f, i) => (
                           <div
@@ -515,9 +710,7 @@ export default function Login_dash() {
                               borderRadius: "6px",
                               overflow: "hidden",
                               cursor: "pointer",
-                              border: i === activeFrame
-                                ? `2px solid ${sev.color}`
-                                : "2px solid transparent",
+                              border: i === activeFrame ? `2px solid ${sev.color}` : "2px solid transparent",
                               opacity: i === activeFrame ? 1 : 0.55,
                               transition: "all 0.2s",
                             }}
@@ -533,7 +726,7 @@ export default function Login_dash() {
                     </div>
                   )}
 
-                  {/* Best detection frame (if weapon found) */}
+                  {/* Best detection frame (if backend sends best_frame_b64) */}
                   {results.best_frame_b64 && (
                     <div style={{ marginBottom: "1.5rem" }}>
                       <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "0.8rem" }}>
@@ -549,7 +742,7 @@ export default function Login_dash() {
                     </div>
                   )}
 
-                  {/* Video meta */}
+                  {/* Video meta — only if backend sends video_info */}
                   {results.video_info && (
                     <div style={{
                       display: "flex",
@@ -563,7 +756,7 @@ export default function Login_dash() {
                     }}>
                       <span>⏱ {results.video_info.duration_seconds}s</span>
                       <span>📽 {results.video_info.fps} fps</span>
-                      <span>🖼 {results.frames_analysed} frames analysed</span>
+                      {results.frames_analysed && <span>🖼 {results.frames_analysed} frames analysed</span>}
                       <span>📐 {results.video_info.width}×{results.video_info.height}</span>
                     </div>
                   )}

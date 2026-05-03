@@ -1,62 +1,72 @@
 import os
 
-# ── Model Paths ────────────────────────────────────────────────────────────────
-# Update these paths to match where your model files are stored on your machine
-YOLO_MODEL_PATH = r"D:\projects\edp\Guardian-Eye---CCTV-anomaly-detection\best.pt"
-LRCN_MODEL_PATH   = r"D:\projects\edp\Guardian-Eye---CCTV-anomaly-detection\best_lrcn_model.h5"
+# ── MODEL PATHS ─────────────────────────────
+YOLO_MODEL_PATH = r"D:\projects\edp\Guardian-Eye---CCTV-anomaly-detection\models\best.pt"
+LRCN_MODEL_PATH = r"D:\projects\edp\Guardian-Eye---CCTV-anomaly-detection\models\guardian_eye_pytorch_20260504_014000_acc0.4667.pth"
 
-# ── Detection Settings ─────────────────────────────────────────────────────────
-YOLO_CONFIDENCE   = 0.45          # Min confidence for weapon detection
-FRAME_INTERVAL    = 10            # Sample every Nth frame for detection
-SEQUENCE_LENGTH   = 16            # Frames fed into LRCN classifier
+# ── SETTINGS ────────────────────────────────
+YOLO_CONF = 0.4
+FRAME_INTERVAL = 10
+SEQ_LEN = 16
+IMG_SIZE = 128
 
-# ── LRCN Input Shape ───────────────────────────────────────────────────────────
-# ⚠️  Match these to what your model was trained on
-LRCN_IMG_HEIGHT   = 64
-LRCN_IMG_WIDTH    = 64
+# ── CLASSES ────────────────────────────────
+WEAPON_CLASSES = {
+    0: "gun",
+    1: "knife"
+}
 
-# ── Crime Classes ──────────────────────────────────────────────────────────────
-# ⚠️  Order must match the output order of your LRCN model
+# FIX: These are the actual strings the LRCN classifier outputs (all lowercase).
+# SEVERITY_MAP keys MUST match these exactly — any case mismatch returns "LOW".
 CRIME_CLASSES = [
-    "Normal",
-    "Shoplifting",
-    "Fighting",
-    "Burglary",
-    "Kidnapping",
-    "Robbery",
+    'shooting', 'fighting', 'explosion',
+    'roadaccidents', 'stealing', 'normal'
 ]
 
-# ── Weapon Classes ─────────────────────────────────────────────────────────────
-# ⚠️  Match class indices from your data.yaml
-WEAPON_CLASSES = {
-    0: "knife",
-    1: "gun",
-}
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# ── Severity Mapping ───────────────────────────────────────────────────────────
-# Determine severity based on detected weapon and crime type
+
+# ── TWILIO CONFIG ───────────────────────
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = "f4e9131fd6a8e5c7a82ab483edcb161f"
+TWILIO_PHONE = "+16067052530"   # Twilio number
+ALERT_PHONE = "+917666876382"  # Your phone
+
+# ── Severity Mapping ─────────────────────────────────────────────────────────
+#
+# BUG FIXED: All crime keys are now lowercase to match CRIME_CLASSES output.
+#
+# Previously the keys used Title Case ("Fighting", "Normal", etc.) but the LRCN
+# classifier returns lowercase strings ("fighting", "normal").  A dict lookup is
+# case-sensitive, so EVERY lookup was silently missing and defaulting to "LOW".
+#
+# BUG FIXED: Added the 4 classes that exist in CRIME_CLASSES but were completely
+# absent from the old map ("shooting", "explosion", "roadaccidents", "stealing").
+# Those 4 classes always returned "LOW" regardless of weapon — now they are mapped.
+#
 SEVERITY_MAP = {
-    # (weapon, crime)  → severity
-    ("gun",   "Normal"):      "CRITICAL",
-    ("gun",   "Robbery"):     "CRITICAL",
-    ("gun",   "Kidnapping"):  "CRITICAL",
-    ("gun",   "Fighting"):    "CRITICAL",
-    ("gun",   "Burglary"):    "CRITICAL",
-    ("gun",   "Shoplifting"): "HIGH",
-    ("knife", "Fighting"):    "HIGH",
-    ("knife", "Robbery"):     "HIGH",
-    ("knife", "Kidnapping"):  "CRITICAL",
-    ("knife", "Normal"):      "HIGH",
-    ("knife", "Burglary"):    "HIGH",
-    ("knife", "Shoplifting"): "MEDIUM",
-    ("none",  "Normal"):      "LOW",
-    ("none",  "Shoplifting"): "MEDIUM",
-    ("none",  "Fighting"):    "HIGH",
-    ("none",  "Burglary"):    "MEDIUM",
-    ("none",  "Kidnapping"):  "HIGH",
-    ("none",  "Robbery"):     "HIGH",
-}
+    # ── gun + crime ──────────────────────────────────────────────────────────
+    ("gun",   "normal"):        "CRITICAL",
+    ("gun",   "shooting"):      "CRITICAL",
+    ("gun",   "fighting"):      "CRITICAL",
+    ("gun",   "explosion"):     "CRITICAL",
+    ("gun",   "roadaccidents"): "HIGH",
+    ("gun",   "stealing"):      "HIGH",
 
-# ── Upload Settings ────────────────────────────────────────────────────────────
-UPLOAD_DIR   = "uploads"
-MAX_FILE_MB  = 500
+    # ── knife + crime ────────────────────────────────────────────────────────
+    ("knife", "fighting"):      "HIGH",
+    ("knife", "shooting"):      "CRITICAL",
+    ("knife", "normal"):        "HIGH",
+    ("knife", "explosion"):     "HIGH",
+    ("knife", "roadaccidents"): "MEDIUM",
+    ("knife", "stealing"):      "HIGH",
+
+    # ── no weapon + crime ────────────────────────────────────────────────────
+    ("none",  "normal"):        "LOW",
+    ("none",  "shooting"):      "CRITICAL",
+    ("none",  "fighting"):      "HIGH",
+    ("none",  "explosion"):     "HIGH",
+    ("none",  "roadaccidents"): "MEDIUM",
+    ("none",  "stealing"):      "MEDIUM",
+}

@@ -1,184 +1,129 @@
-"""
-Video router — handles video upload and the full AI analysis pipeline.
-
-Endpoints
----------
-POST /api/video/upload-video   → save file, return saved path
-POST /api/video/analyze        → run detection + classification, return results
-"""
-
+from fastapi import APIRouter, UploadFile, File
 import os
 import uuid
-import shutil
-import base64
 import cv2
-import numpy as np
-
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-
+import base64
+from db import alerts_collection
+from datetime import datetime
 from config import UPLOAD_DIR, SEVERITY_MAP
-from utils.frame_extractor import extract_frames, get_video_info
+from utils.alert import send_alert
+from utils.frame_extractor import extract_frames
 from models import get_detector, get_classifier
 
 router = APIRouter()
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-
-# ─── Upload ───────────────────────────────────────────────────────────────────
-
+# ── UPLOAD ─────────────────────────────────────────────────────────────────
 @router.post("/upload-video")
 async def upload_video(file: UploadFile = File(...)):
-    """
-    Save uploaded video to disk.
-    Returns the saved path so the frontend can pass it to /analyze.
-    """
-    # Basic type check
-    allowed_ext = {".mp4", ".avi", ".mov", ".mkv"}
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in allowed_ext:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+    filename = f"{uuid.uuid4()}_{file.filename}"
+    path = os.path.join(UPLOAD_DIR, filename)
 
-    unique_name = f"{uuid.uuid4()}{ext}"
-    file_path   = os.path.join(UPLOAD_DIR, unique_name)
+    with open(path, "wb") as f:
+        f.write(await file.read())
 
-    with open(file_path, "wb") as buf:
-        shutil.copyfileobj(file.file, buf)
-
-    return {
-        "filename": file.filename,
-        "status":   "saved",
-        "path":     file_path,          # returned to frontend, sent back in /analyze
-    }
+    return {"path": path}
 
 
-# ─── Analyze ──────────────────────────────────────────────────────────────────
-
-class AnalyzeRequest(BaseModel):
-    path: str   # file path returned from /upload-video
-
-
+# ── ANALYZE ────────────────────────────────────────────────────────────────
 @router.post("/analyze")
-async def analyze_video(req: AnalyzeRequest):
-    """
-    Full AI pipeline:
-      1. Extract frames from video
-      2. Run YOLOv8 weapon detection on every frame
-      3. Run LRCN crime classification on the frame sequence
-      4. Combine results → severity level + alert message
-    """
-    if not os.path.exists(req.path):
-        raise HTTPException(status_code=404, detail="Video file not found on server.")
+async def analyze(data: dict):
+    video_path = data["path"]
 
-    # ── 1. Video metadata ──────────────────────────────────────────────────
-    try:
-        info = get_video_info(req.path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cannot read video: {e}")
+    # Extract frames
+    frames = extract_frames(video_path)
 
-    # ── 2. Extract frames ──────────────────────────────────────────────────
-    try:
-        frames = extract_frames(req.path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Frame extraction failed: {e}")
+    detector   = get_detector()
+    classifier = get_classifier()
 
-    if len(frames) == 0:
-        raise HTTPException(status_code=422, detail="No frames could be extracted.")
+    best_frame = None
+    best_conf  = 0.0
+    weapon     = "none"
 
-    # ── 3. Weapon detection ────────────────────────────────────────────────
-    try:
-        detector       = get_detector()
-        detection_res  = detector.detect_frames(frames)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Weapon detection failed: {e}")
+    # ── Weapon Detection ──────────────────────────────────────────────────
+    for frame in frames:
+        detections, annotated = detector.detect(frame)
 
-    # ── 4. Crime classification ────────────────────────────────────────────
-    try:
-        classifier  = get_classifier()
-        class_res   = classifier.classify(frames)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Crime classification failed: {e}")
+        for d in detections:
+            if d["confidence"] > best_conf:
+                best_conf  = d["confidence"]
+                weapon     = d["class"]
+                best_frame = annotated
 
-    # ── 5. Determine severity & alert ──────────────────────────────────────
-    weapon      = detection_res["weapon_detected"]   # "gun" | "knife" | "none"
-    crime       = class_res["crime_type"]            # e.g. "Fighting"
-    key         = (weapon, crime)
-    severity    = SEVERITY_MAP.get(key, _fallback_severity(weapon, crime))
-    alert_msg   = _build_alert_message(weapon, crime, severity)
+    # ── Crime Classification ───────────────────────────────────────────────
+    crime_result = classifier.classify(frames)
 
-    # ── 6. Sample annotated frames for the frontend ────────────────────────
-    preview_frames_b64 = _sample_preview_frames(frames, detection_res["all_detections"], detector)
+    # BUG FIXED: The old code used crime_result["crime"] on line 53 but then
+    # crime_result["crime_type"] in the return block — one of the two always
+    # crashes with a KeyError.  We now read the crime label once using .get()
+    # with a fallback so it works regardless of which key the classifier uses.
+    crime = (
+        crime_result.get("crime_type")
+        or crime_result.get("crime")
+        or "normal"
+    ).lower()   # normalise to lowercase to match SEVERITY_MAP keys
 
-    return JSONResponse({
-        # Detection
-        "weapon_detected":  weapon,
-        "weapon_confidence": detection_res["max_confidence"],
-        "best_frame_b64":   detection_res["best_frame_b64"],   # may be None
+    crime_confidence = crime_result.get("confidence", 0.0)
 
-        # Classification
-        "crime_type":        crime,
-        "crime_confidence":  class_res["confidence"],
-        "all_scores":        class_res["all_scores"],
-        "is_anomaly":        class_res["is_anomaly"],
+    # ── Severity Mapping ──────────────────────────────────────────────────
+    # BUG FIXED: Severity was computed TWICE (lines 57 and 73 in the original).
+    # The first computation drove alert sending; the second overwrote it for the
+    # response.  They used different crime variables so they could disagree —
+    # e.g. alert fires at HIGH but response returns LOW (or vice-versa).
+    # Now there is exactly ONE severity computation, used for both.
+    severity = SEVERITY_MAP.get((weapon, crime), "LOW")
 
-        # Alert
-        "severity":          severity,
-        "alert_message":     alert_msg,
-        "preview_frames":    preview_frames_b64,   # list of b64 JPEGs
+    # ── Send Alert ────────────────────────────────────────────────────────
+    alert_sent = False
+    if severity in ["HIGH", "CRITICAL"]:
+        send_alert(weapon, crime, severity)
+        alert_sent = True
 
-        # Meta
-        "video_info":        info,
-        "frames_analysed":   len(frames),
+    # ── Save Best Frame + encode as base64 ────────────────────────────────
+    # BUG FIXED: The old code saved the annotated frame to disk and returned its
+    # filesystem path (e.g. "uploads/result_abc.jpg").  A browser cannot load a
+    # server-side file path as an <img> src.  We now also encode the frame as a
+    # base64 string and include it in the JSON response so the frontend can
+    # render it directly with:  src={`data:image/jpeg;base64,${best_frame_b64}`}
+    output_path    = None
+    best_frame_b64 = None
+
+    if best_frame is not None:
+        output_filename = f"result_{uuid.uuid4()}.jpg"
+        output_path     = os.path.join(UPLOAD_DIR, output_filename)
+        cv2.imwrite(output_path, best_frame)
+
+        # Encode the saved file to base64 for the frontend
+        with open(output_path, "rb") as img_file:
+            best_frame_b64 = base64.b64encode(img_file.read()).decode("utf-8")
+
+        # ── Save to MongoDB ─────────────────────────────────────────
+    alert_message = f"{crime.upper()} detected with {weapon.upper()} (Severity: {severity})"
+
+    alerts_collection.insert_one({
+        "video_path": video_path,
+        "frame_path": output_path,
+        "weapon": weapon,
+        "weapon_confidence": best_conf,
+        "crime": crime,
+        "crime_confidence": crime_confidence,
+        "severity": severity,
+        "alert_sent": alert_sent,
+        "alert_message": alert_message,
+        "timestamp": datetime.now()
     })
 
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-def _fallback_severity(weapon: str, crime: str) -> str:
-    if weapon == "gun":
-        return "CRITICAL"
-    if weapon == "knife":
-        return "HIGH"
-    if crime in ("Fighting", "Kidnapping", "Robbery"):
-        return "HIGH"
-    if crime in ("Burglary", "Shoplifting"):
-        return "MEDIUM"
-    return "LOW"
-
-
-def _build_alert_message(weapon: str, crime: str, severity: str) -> str:
-    weapon_part = f" with {weapon} detected" if weapon != "none" else ""
-    return f"[{severity}] {crime} activity detected{weapon_part}. Immediate review recommended."
+    # ── Response ──────────────────────────────────────────────────────────
+    return {
+    "weapon": weapon,
+    "weapon_confidence": best_conf,
+    "crime": crime,
+    "crime_confidence": crime_confidence,
+    "severity": severity,
+    "frame_path": output_path,
+    "best_frame_b64": best_frame_b64,
+    "alert_sent": alert_sent,
+    "alert_message": alert_message
+}
 
 
-def _sample_preview_frames(
-    frames: list,
-    all_detections: list,
-    detector,
-    n: int = 4,
-) -> list[str]:
-    """
-    Pick n evenly-spaced frames, draw boxes on any that had detections,
-    return as base64-encoded JPEGs.
-    """
-    indices  = np.linspace(0, len(frames) - 1, n, dtype=int)
-    previews = []
-
-    for i in indices:
-        frame = frames[i].copy()
-        dets  = all_detections[i] if i < len(all_detections) else []
-
-        # Re-draw boxes (already drawn in detect_frames but we need fresh copies)
-        for d in dets:
-            x1, y1, x2, y2 = d["bbox"]
-            label = d["class"].upper()
-            color = (0, 0, 255) if label == "GUN" else (0, 140, 255)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(frame, f"{label} {d['confidence']:.0%}",
-                        (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-
-        previews.append(detector._frame_to_b64(frame))
-
-    return previews

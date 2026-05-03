@@ -1,18 +1,14 @@
-"""
-Lazy singleton loader for ML models.
-Models are loaded once on first use and reused across requests.
-"""
+# backend/models/__init__.py
 
-from functools import lru_cache
-from models.detector   import WeaponDetector
-from models.classifier import CrimeClassifier
+from .detector  import WeaponDetector
+from .classifier import CrimeClassifier
 
+# Singletons — loaded once at startup, reused for every request
+detector   = WeaponDetector()
+classifier = CrimeClassifier()
 
-@lru_cache(maxsize=1)
-def get_detector() -> WeaponDetector:
-    return WeaponDetector()
+def get_detector():
+    return detector
 
-
-@lru_cache(maxsize=1)
-def get_classifier() -> CrimeClassifier:
-    return CrimeClassifier()
+def get_classifier():
+    return classifier
