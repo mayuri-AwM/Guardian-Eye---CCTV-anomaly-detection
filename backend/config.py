@@ -1,5 +1,8 @@
 import os
+from dotenv import load_dotenv
 
+
+load_dotenv()
 # ── MODEL PATHS ─────────────────────────────
 YOLO_MODEL_PATH = r"D:\projects\edp\Guardian-Eye---CCTV-anomaly-detection\models\best.pt"
 LRCN_MODEL_PATH = r"D:\projects\edp\Guardian-Eye---CCTV-anomaly-detection\models\guardian_eye_pytorch_20260504_014000_acc0.4667.pth"
@@ -31,7 +34,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = "f4e9131fd6a8e5c7a82ab483edcb161f"
 TWILIO_PHONE = "+16067052530"   # Twilio number
-ALERT_PHONE = "+917666876382"  # Your phone
+ALERT_PHONE = "+917666876382"  # Your phonef4e9131fd6a8e5c7a82ab483edcb161f
 
 # ── Severity Mapping ─────────────────────────────────────────────────────────
 #
